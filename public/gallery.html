@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galeri Majlis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&family=Great+Vibes&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
+<style>
+  body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  header { position: relative; z-index: 1; text-align: center; padding: 18px 20px 6px; }
+  .names { font-size: clamp(44px, 6vw, 84px); }
+  .invite { font-size: clamp(16px, 1.5vw, 22px); font-style: italic; margin-top: 2px; }
+  #status { display: none; font-size: 14px; color: var(--rose-deep); margin-left: 8px; }
+  .grid { position: relative; z-index: 1; flex: 1; overflow-y: auto; scrollbar-width: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 30px 26px; padding: 18px clamp(20px, 6vw, 110px) 50px; align-content: start; }
+  .grid::-webkit-scrollbar { display: none; }
+
+  .photo-card { position: relative; background: #fffdfb; padding: 11px 11px 4px; border-radius: 6px; border: 1px solid rgba(201, 162, 75, .4); box-shadow: 0 10px 28px rgba(180, 86, 111, .22); transform: rotate(var(--r, 0deg)); animation: bloom .9s cubic-bezier(.2, .8, .3, 1) both; }
+  .photo-card::before { content: '✿'; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 26px; color: var(--rose); text-shadow: 0 1px 0 #fff; }
+  .photo-card img { display: block; width: 100%; height: 260px; object-fit: cover; border-radius: 3px; background: var(--blush); }
+  .caption { text-align: center; padding: 10px 6px 12px; }
+  .guest-name { font-family: 'Great Vibes', 'Snell Roundhand', 'Brush Script MT', cursive; font-size: 30px; color: var(--rose-deep); line-height: 1.1; }
+  .guest-message { font-size: 18px; font-style: italic; font-weight: 500; margin-top: 4px; word-break: break-word; }
+  .photo-card.fresh { animation: bloom .9s cubic-bezier(.2, .8, .3, 1) both, glow 2.4s ease-in-out 3; }
+  .del { position: absolute; top: 8px; right: 8px; background: rgba(180, 35, 24, .92); color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: 14px; }
+
+  @keyframes bloom { from { opacity: 0; transform: rotate(var(--r, 0deg)) scale(.82) translateY(24px); } to { opacity: 1; transform: rotate(var(--r, 0deg)) scale(1); } }
+  @keyframes glow { 0%, 100% { box-shadow: 0 10px 28px rgba(180, 86, 111, .22); } 50% { box-shadow: 0 0 0 5px rgba(201, 162, 75, .55), 0 14px 38px rgba(201, 162, 75, .55); } }
+</style>
+</head>
+<body data-petals="1">
+  <header>
+    <div class="eyebrow" data-w="title"></div>
+    <h1 class="script names" data-w="names"></h1>
+    <div class="date" data-w="date"></div>
+    <div class="divider">✿</div>
+    <div class="invite">Imbas kod QR di meja anda untuk kongsi gambar &amp; ucapan <span id="status">Menyambung semula...</span></div>
+  </header>
+
+  <div class="grid" id="galleryGrid"></div>
+
+<script src="/config.js"></script>
+<script src="/florals.js"></script>
+<script>
+  const grid = document.getElementById('galleryGrid');
+  const statusEl = document.getElementById('status');
+  const adminKey = new URLSearchParams(location.search).get('key'); // /gallery?key=KUNCI untuk padam gambar
+  const cards = new Map();
+  let firstLoadDone = false;
+  let cursor = '';
+
+  function tilt(id) { // senget sedikit, tetap untuk setiap gambar
+    return ((parseInt(id.slice(-2), 16) % 5) - 2) * 0.8 + 'deg';
+  }
+
+  function makeCard(item, fresh) {
+    const card = document.createElement('div');
+    card.className = 'photo-card' + (fresh ? ' fresh' : '');
+    card.style.setProperty('--r', tilt(item.id));
+
+    const img = document.createElement('img');
+    img.src = item.imageUrl;
+    img.alt = 'Kiriman Tetamu';
+    img.loading = 'lazy';
+
+    const caption = document.createElement('div');
+    caption.className = 'caption';
+    const name = document.createElement('div');
+    name.className = 'guest-name';
+    name.textContent = item.senderName || 'Tetamu';
+    const msg = document.createElement('div');
+    msg.className = 'guest-message';
+    msg.textContent = item.message || 'Selamat pengantin baru!';
+    caption.append(name, msg);
+
+    card.append(img, caption);
+
+    if (adminKey) {
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = 'Padam';
+      del.onclick = async () => {
+        if (!confirm('Padam gambar ini?')) return;
+        await fetch('/api/photos/' + encodeURIComponent(item.id), { method: 'DELETE', headers: { 'x-admin-key': adminKey } });
+        fetchPhotos();
+      };
+      card.append(del);
+    }
+    return card;
+  }
+
+  async function fetchPhotos() {
+    try {
+      const res = await fetch('/api/photos?since=' + encodeURIComponent(cursor));
+      if (!res.ok) throw new Error('ralat');
+      const { ids, items, more } = await res.json();
+      statusEl.style.display = 'none';
+
+      const idSet = new Set(ids);
+      for (const [id, card] of cards) {
+        if (!idSet.has(id)) { card.remove(); cards.delete(id); }
+      }
+
+      items.sort((a, b) => (a.id < b.id ? -1 : 1)).forEach(item => {
+        if (item.id > cursor) cursor = item.id;
+        if (cards.has(item.id)) return;
+        const card = makeCard(item, firstLoadDone);
+        cards.set(item.id, card);
+        grid.prepend(card); // terbaru paling atas
+      });
+
+      if (firstLoadDone && items.length) grid.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!more) firstLoadDone = true;
+      if (more) setTimeout(fetchPhotos, 300); // teruskan muat gambar lama
+    } catch (err) {
+      statusEl.style.display = 'inline';
+    }
+  }
+
+  fetchPhotos();
+  setInterval(fetchPhotos, 5000);
+</script>
+</body>
+</html>

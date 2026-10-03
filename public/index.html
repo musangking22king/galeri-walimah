@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kongsi Gambar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&family=Great+Vibes&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
+<style>
+  body { overflow-y: auto; min-height: 100dvh; }
+  .wrap { position: relative; z-index: 1; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 22px 36px; text-align: center; }
+  .names { font-size: clamp(44px, 14vw, 64px); }
+  .lead { font-size: 20px; font-style: italic; margin: 0 0 22px; max-width: 340px; line-height: 1.35; }
+  .panel { width: 100%; max-width: 380px; }
+  .btn { display: block; width: 100%; padding: 17px; border-radius: 999px; font: 700 20px 'Cormorant Garamond', Georgia, serif; letter-spacing: .03em; cursor: pointer; text-align: center; border: 2px solid var(--gold); background: linear-gradient(135deg, #e89bb1, #c96b87); color: #fff; box-shadow: 0 8px 20px rgba(180, 86, 111, .3); }
+  .btn.secondary { background: rgba(255, 255, 255, .75); color: var(--rose-deep); box-shadow: none; margin-top: 12px; border-color: rgba(201, 162, 75, .55); }
+  .btn:disabled { opacity: .6; }
+  input[type=file] { display: none; }
+  input[type=text], textarea { width: 100%; padding: 14px 16px; margin-bottom: 10px; border-radius: 14px; border: 1.5px solid #efc9d2; background: rgba(255, 255, 255, .9); color: var(--ink); font: 500 17px 'Cormorant Garamond', Georgia, serif; }
+  input:focus, textarea:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(217, 139, 160, .25); }
+  #preview { width: 100%; max-height: 46dvh; object-fit: contain; background: #fff; padding: 9px; border-radius: 6px; border: 1px solid rgba(201, 162, 75, .4); box-shadow: 0 10px 25px rgba(180, 86, 111, .25); margin-bottom: 16px; transform: rotate(-1deg); }
+  #form, #done { display: none; }
+  #err { color: #b42318; margin-top: 10px; min-height: 20px; font-size: 16px; }
+  .big-flower { font-size: 54px; color: var(--rose); line-height: 1; }
+  .thanks { font-size: 52px; color: var(--rose-deep); margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow" data-w="title"></div>
+  <h1 class="script names" data-w="names"></h1>
+  <div class="date" data-w="date"></div>
+  <div class="divider">✿</div>
+  <p class="lead">Abadikan detik indah ini. Kongsi gambar anda di skrin majlis!</p>
+
+  <div class="panel" id="start">
+    <label class="btn" for="cam">📷 Ambil Gambar</label>
+    <input id="cam" type="file" accept="image/*" capture="environment">
+    <label class="btn secondary" for="gal">🖼️ Pilih dari Galeri</label>
+    <input id="gal" type="file" accept="image/*">
+  </div>
+
+  <div class="panel" id="form">
+    <img id="preview" alt="Pratonton">
+    <input type="text" id="name" maxlength="40" placeholder="Nama anda">
+    <textarea id="message" maxlength="200" rows="2" placeholder="Ucapan untuk pengantin (pilihan)"></textarea>
+    <button class="btn" id="send">Hantar ke Skrin ✿</button>
+    <button class="btn secondary" id="retake">Ambil Semula</button>
+    <div id="err"></div>
+  </div>
+
+  <div class="panel" id="done">
+    <div class="big-flower">✿</div>
+    <div class="script thanks">Terima kasih!</div>
+    <p class="lead" style="margin:0 auto 20px">Gambar anda akan muncul di skrin sebentar lagi.</p>
+    <button class="btn" id="again">📷 Ambil Gambar Lagi</button>
+  </div>
+</div>
+
+<script src="/config.js"></script>
+<script src="/florals.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let blob = null;
+
+try { $('name').value = localStorage.getItem('guestName') || ''; } catch {}
+
+function show(which) {
+  $('start').style.display = which === 'start' ? 'block' : 'none';
+  $('form').style.display = which === 'form' ? 'block' : 'none';
+  $('done').style.display = which === 'done' ? 'block' : 'none';
+}
+
+// Kecilkan & tukar ke JPEG supaya muat naik laju di Wi-Fi dewan
+function toJpeg(file, max) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s);
+      c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('gagal')), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => reject(new Error('gagal'));
+    img.src = url;
+  });
+}
+
+async function onPick(e) {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    blob = await toJpeg(f, 1600);
+    $('preview').src = URL.createObjectURL(blob);
+    $('err').textContent = '';
+    show('form');
+  } catch {
+    alert('Gambar ini tidak dapat dibuka. Cuba ambil gambar lain.');
+  }
+}
+$('cam').addEventListener('change', onPick);
+$('gal').addEventListener('change', onPick);
+
+$('retake').onclick = () => { blob = null; show('start'); };
+$('again').onclick = () => { $('message').value = ''; show('start'); };
+
+$('send').onclick = async () => {
+  if (!blob) return;
+  const btn = $('send');
+  btn.disabled = true; btn.textContent = 'Menghantar...'; $('err').textContent = '';
+  const fd = new FormData();
+  fd.append('photo', blob, 'photo.jpg');
+  fd.append('name', $('name').value);
+  fd.append('message', $('message').value);
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).error || 'Gagal');
+    try { localStorage.setItem('guestName', $('name').value); } catch {}
+    blob = null;
+    show('done');
+  } catch (err) {
+    $('err').textContent = err.message === 'Failed to fetch' ? 'Tiada sambungan. Cuba lagi.' : err.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Hantar ke Skrin ✿';
+  }
+};
+</script>
+</body>
+</html>
