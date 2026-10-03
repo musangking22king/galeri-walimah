@@ -28,6 +28,8 @@
 
   @keyframes bloom { from { opacity: 0; transform: rotate(var(--r, 0deg)) scale(.82) translateY(24px); } to { opacity: 1; transform: rotate(var(--r, 0deg)) scale(1); } }
   @keyframes glow { 0%, 100% { box-shadow: 0 10px 28px rgba(180, 86, 111, .22); } 50% { box-shadow: 0 0 0 5px rgba(201, 162, 75, .55), 0 14px 38px rgba(201, 162, 75, .55); } }
+  .fab { display: none; position: fixed; z-index: 2; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 14px 26px; border-radius: 999px; border: 2px solid var(--gold); background: linear-gradient(135deg, #e89bb1, #c96b87); color: #fff; font: 700 19px 'Cormorant Garamond', Georgia, serif; text-decoration: none; box-shadow: 0 8px 20px rgba(180, 86, 111, .35); white-space: nowrap; }
+  @media (max-width: 700px) { .fab { display: block; } .grid { padding-bottom: 100px; } }
 </style>
 </head>
 <body data-petals="1">
@@ -40,7 +42,9 @@
   </header>
 
   <div class="grid" id="galleryGrid"></div>
+  <a class="fab" href="/">📷 Hantar gambar</a>
 
+<script src="/guest.js"></script>
 <script src="/config.js"></script>
 <script src="/florals.js"></script>
 <script>
@@ -77,13 +81,16 @@
 
     card.append(img, caption);
 
-    if (adminKey) {
+    if (adminKey || item.mine) {
       const del = document.createElement('button');
       del.className = 'del';
-      del.textContent = 'Padam';
+      del.textContent = (item.mine && !adminKey) ? 'Padam gambar saya' : 'Padam';
       del.onclick = async () => {
         if (!confirm('Padam gambar ini?')) return;
-        await fetch('/api/photos/' + encodeURIComponent(item.id), { method: 'DELETE', headers: { 'x-admin-key': adminKey } });
+        const headers = { 'x-guest-token': window.guestToken };
+        if (adminKey) headers['x-admin-key'] = adminKey;
+        const r = await fetch('/api/photos/' + encodeURIComponent(item.id), { method: 'DELETE', headers });
+        if (!r.ok) alert('Gambar ini tidak dapat dipadam.');
         fetchPhotos();
       };
       card.append(del);
@@ -93,7 +100,7 @@
 
   async function fetchPhotos() {
     try {
-      const res = await fetch('/api/photos?since=' + encodeURIComponent(cursor));
+      const res = await fetch('/api/photos?since=' + encodeURIComponent(cursor), { headers: { 'x-guest-token': window.guestToken } });
       if (!res.ok) throw new Error('ralat');
       const { ids, items, more } = await res.json();
       statusEl.style.display = 'none';

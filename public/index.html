@@ -17,6 +17,7 @@
   .btn { display: block; width: 100%; padding: 17px; border-radius: 999px; font: 700 20px 'Cormorant Garamond', Georgia, serif; letter-spacing: .03em; cursor: pointer; text-align: center; border: 2px solid var(--gold); background: linear-gradient(135deg, #e89bb1, #c96b87); color: #fff; box-shadow: 0 8px 20px rgba(180, 86, 111, .3); }
   .btn.secondary { background: rgba(255, 255, 255, .75); color: var(--rose-deep); box-shadow: none; margin-top: 12px; border-color: rgba(201, 162, 75, .55); }
   .btn:disabled { opacity: .6; }
+  a.btn { text-decoration: none; }
   input[type=file] { display: none; }
   input[type=text], textarea { width: 100%; padding: 14px 16px; margin-bottom: 10px; border-radius: 14px; border: 1.5px solid #efc9d2; background: rgba(255, 255, 255, .9); color: var(--ink); font: 500 17px 'Cormorant Garamond', Georgia, serif; }
   input:focus, textarea:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(217, 139, 160, .25); }
@@ -40,6 +41,7 @@
     <input id="cam" type="file" accept="image/*" capture="environment">
     <label class="btn secondary" for="gal">🖼️ Pilih dari Galeri</label>
     <input id="gal" type="file" accept="image/*">
+    <a class="btn secondary" href="/gallery">✿ Lihat Gambar Tetamu</a>
   </div>
 
   <div class="panel" id="form">
@@ -54,11 +56,14 @@
   <div class="panel" id="done">
     <div class="big-flower">✿</div>
     <div class="script thanks">Terima kasih!</div>
-    <p class="lead" style="margin:0 auto 20px">Gambar anda akan muncul di skrin sebentar lagi.</p>
+    <p class="lead" style="margin:0 auto 8px">Gambar anda akan muncul di skrin sebentar lagi.</p>
+    <p class="lead" id="quota" style="margin:0 auto 20px; font-size:17px; opacity:.8"></p>
     <button class="btn" id="again">📷 Ambil Gambar Lagi</button>
+    <a class="btn secondary" href="/gallery">✿ Lihat Semua Gambar</a>
   </div>
 </div>
 
+<script src="/guest.js"></script>
 <script src="/config.js"></script>
 <script src="/florals.js"></script>
 <script>
@@ -119,9 +124,16 @@ $('send').onclick = async () => {
   fd.append('photo', blob, 'photo.jpg');
   fd.append('name', $('name').value);
   fd.append('message', $('message').value);
+  fd.append('token', window.guestToken);
   try {
     const res = await fetch('/api/upload', { method: 'POST', body: fd });
     if (!res.ok) throw new Error((await res.json()).error || 'Gagal');
+    const r = await res.json();
+    const full = r.count >= r.limit;
+    $('quota').textContent = full
+      ? 'Anda telah hantar ' + r.limit + ' gambar, iaitu had maksimum. Terima kasih!'
+      : 'Gambar ke-' + r.count + ' daripada ' + r.limit + '. Anda boleh hantar ' + (r.limit - r.count) + ' lagi.';
+    $('again').style.display = full ? 'none' : 'block';
     try { localStorage.setItem('guestName', $('name').value); } catch {}
     blob = null;
     show('done');
